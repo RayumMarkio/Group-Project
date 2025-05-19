@@ -2,7 +2,7 @@
 A website where individuals can securely keep a record of their thoughts and memories in a digital format.
 # Online Diary Website
 
-A web-based personal diary application built with HTML, CSS, JavaScript, and PHP.
+A web-based personal diary application built with HTML, CSS and JavaScript. 
 
 ## Features
 
@@ -12,7 +12,6 @@ A web-based personal diary application built with HTML, CSS, JavaScript, and PHP
 
 ### Prerequisites
 
-- A web server with PHP support, such as XAMPP or WAMP.
 - A web browser to access the website.
 
 
@@ -26,5 +25,5 @@ A web-based personal diary application built with HTML, CSS, JavaScript, and PHP
 - [HTML](https://en.wikipedia.org/wiki/HTML)
 - [CSS](https://en.wikipedia.org/wiki/Cascading_Style_Sheets)
 - [JavaScript](https://en.wikipedia.org/wiki/JavaScript)
-- [PHP](https://en.wikipedia.org/wiki/PHP)
+
 
