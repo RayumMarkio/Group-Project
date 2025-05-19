@@ -1,0 +1,164 @@
+from flask import Flask, request, redirect, session, render_template, flash
+from flask_sqlalchemy import SQLAlchemy
+import hashlib
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Change to a proper secret key
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///online_diary.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(100))
+    last_name = db.Column(db.String(100))
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(100))
+
+    journals = db.relationship('Journal', backref='user', lazy=True)
+
+
+class Journal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255))
+    description = db.Column(db.Text)
+    date = db.Column(db.String(50))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    images = db.relationship('Image', backref='journal', lazy=True)
+
+
+class Image(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    image_url = db.Column(db.String(255))
+    journal_id = db.Column(db.Integer, db.ForeignKey('journal.id'), nullable=False)
+
+
+db.create_all()
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    email = request.form['email']
+    password = hashlib.md5(request.form['password'].encode()).hexdigest()
+    user = User.query.filter_by(email=email, password=password).first()
+
+    if user:
+        session['email'] = user.email
+        session['firstName'] = user.first_name
+        return redirect(f"/journals?id={user.id}")
+    else:
+        flash("Email or Password is wrong")
+        return redirect('/')
+
+
+@app.route('/signin', methods=['POST'])
+def signin():
+    first_name = request.form['firstName']
+    last_name = request.form['lastName']
+    email = request.form['email']
+    password = hashlib.md5(request.form['password'].encode()).hexdigest()
+    cpassword = hashlib.md5(request.form['cpassword'].encode()).hexdigest()
+
+    if password == cpassword:
+        if not User.query.filter_by(email=email).first():
+            new_user = User(first_name=first_name, last_name=last_name, email=email, password=password)
+            db.session.add(new_user)
+            db.session.commit()
+
+            session['firstName'] = first_name
+            session['email'] = email
+
+            return redirect(f"/journals?id={new_user.id}")
+        else:
+            flash("Email already exists")
+    else:
+        flash("Passwords do not match")
+
+    return redirect('/')
+
+
+@app.route('/create', methods=['POST'])
+def create_journal():
+    title = request.form['title']
+    description = request.form['description']
+    date = request.form['date']
+    current_user = session.get('email')
+    user = User.query.filter_by(email=current_user).first()
+
+    if user:
+        journal = Journal(title=title, description=description, date=date, user_id=user.id)
+        db.session.add(journal)
+        db.session.commit()
+        return redirect(f"/journals?id={user.id}")
+    else:
+        flash("User not found")
+        return redirect('/')
+
+
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit_journal(id):
+    journal = Journal.query.get(id)
+
+    if request.method == 'POST':
+        journal.title = request.form['title']
+        journal.description = request.form['description']
+        journal.date = request.form['date']
+
+        db.session.commit()
+        return redirect(f"/journals?id={journal.user_id}")
+
+    return render_template('edit_journal.html', journal=journal)
+
+
+@app.route('/delete/<int:id>', methods=['GET'])
+def delete_journal(id):
+    journal = Journal.query.get(id)
+
+    if journal:
+        db.session.delete(journal)
+        db.session.commit()
+
+    current_user = session.get('email')
+    user = User.query.filter_by(email=current_user).first()
+    return redirect(f"/journals?id={user.id}")
+
+
+@app.route('/journals', methods=['GET'])
+def journals():
+    user_id = request.args.get('id')
+    user = User.query.get(user_id)
+    if user:
+        journals = Journal.query.filter_by(user_id=user.id).all()
+        return render_template('journals.html', user=user, journals=journals)
+    else:
+        flash("User not found")
+        return redirect('/')
+
+
+@app.route('/upload_image', methods=['POST'])
+def upload_image():
+    title = request.form['title']
+    date = request.form['date']
+    description = request.form['description']
+
+    journal = Journal.query.filter_by(title=title, date=date, description=description).first()
+
+    if journal and 'uploadedImage' in request.files:
+        uploaded_file = request.files['uploadedImage']
+        file_path = f'uploads/{uploaded_file.filename}'
+        uploaded_file.save(file_path)
+
+        image = Image(image_url=file_path, journal_id=journal.id)
+        db.session.add(image)
+        db.session.commit()
+
+        return redirect(f"/edit/{journal.id}")
+
+    flash("Upload failed")
+    return redirect('/')
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
