@@ -1,0 +1,79 @@
+from flask import Flask, render_template, request, redirect, url_for, session
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:@localhost/online_diary'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# Database Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    first_name = db.Column(db.String(120), nullable=False)
+    journals = db.relationship('Journal', backref='user', lazy=True)
+
+class Journal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    date = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+# Routes
+@app.route('/')
+def index():
+    if 'email' not in session:
+        return redirect(url_for('login'))
+    
+    current_user_email = session['email']
+    user = User.query.filter_by(email=current_user_email).first()
+    
+    if user:
+        journals = Journal.query.filter_by(user_id=user.id).all()
+        return render_template('journals.html', user=user, journals=journals)
+
+    return redirect(url_for('login'))
+
+@app.route('/login')
+def login():
+    # Login page code here (Handle user login, session setup, etc.)
+    return "Login Page"  # Placeholder for actual login logic
+
+@app.route('/create', methods=['GET', 'POST'])
+def create():
+    if request.method == 'POST':
+        title = request.form['title']
+        current_user_email = session['email']
+        user = User.query.filter_by(email=current_user_email).first()
+
+        if user:
+            new_journal = Journal(title=title, user_id=user.id)
+            db.session.add(new_journal)
+            db.session.commit()
+            return redirect(url_for('index'))
+    return render_template('create_journal.html')
+
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit(id):
+    journal = Journal.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        journal.title = request.form['title']
+        db.session.commit()
+        return redirect(url_for('index'))
+    
+    return render_template('edit_journal.html', journal=journal)
+
+@app.route('/delete/<int:id>')
+def delete(id):
+    journal = Journal.query.get_or_404(id)
+    db.session.delete(journal)
+    db.session.commit()
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    db.create_all()  # Creates database tables
+    app.run(debug=True)
